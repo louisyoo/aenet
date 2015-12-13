@@ -463,3 +463,18 @@ char *aeGetApiName(void) {
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep) {
     eventLoop->beforesleep = beforesleep;
 }
+
+/***
+
+    server.el = aeCreateEventLoop
+
+    //....initServer register events in redis.c
+	
+    aeSetBeforeSleepProc(server.el,beforeSleep);
+	
+    aeMain(server.el);
+	
+    DeleteEventLoop(server.el);
+
+
+***/
