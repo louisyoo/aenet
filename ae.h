@@ -51,7 +51,6 @@
 #define AE_NOTUSED(V) ((void) V)
 
 #include <time.h>
-
 struct aeEventLoop;
 
 /* Types and data structures */

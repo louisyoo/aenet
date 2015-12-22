@@ -46,7 +46,8 @@
 #ifdef _AIX
 #undef ip_len
 #endif
-
+#include <stddef.h>
+#include <sys/stat.h>
 int anetTcpConnect(char *err, char *addr, int port);
 int anetTcpNonBlockConnect(char *err, char *addr, int port);
 int anetTcpNonBlockBindConnect(char *err, char *addr, int port, char *source_addr);
@@ -71,5 +72,5 @@ int anetSendTimeout(char *err, int fd, long long ms);
 int anetPeerToString(int fd, char *ip, size_t ip_len, int *port);
 int anetKeepAlive(char *err, int fd, int interval);
 int anetSockName(int fd, char *ip, size_t ip_len, int *port);
-
+int listenToPort( char *bindaddr, int port, int* fds , int *count );
 #endif

@@ -1,2 +1,2 @@
 
-gcc config.h zmalloc.h ae.h ae.c ae_epoll.c zmalloc.c test.c -o test
+gcc zmalloc.h ae.h anet.h config.h zmalloc.c ae.c anet.c ae_epoll.c test.c -o test

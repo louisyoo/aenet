@@ -30,7 +30,7 @@
 
 #ifndef __ZMALLOC_H
 #define __ZMALLOC_H
-#include <stddef.h>
+
 /* Double expansion needed for stringification of macro values. */
 #define __xstr(s) __str(s)
 #define __str(s) #s
@@ -64,6 +64,7 @@
 #ifndef ZMALLOC_LIB
 #define ZMALLOC_LIB "libc"
 #endif
+#include <stddef.h>
 
 void *zmalloc(size_t size);
 void *zcalloc(size_t size);

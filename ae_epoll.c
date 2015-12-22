@@ -28,8 +28,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "ae.h"
+
 #include <sys/epoll.h>
+#include "ae.h"
 
 typedef struct aeApiState {
     int epfd;
@@ -84,7 +85,7 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
     ee.data.u64 = 0; /* avoid valgrind warning */
     ee.data.fd = fd;
-    if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
+    if (epoll_ctl(state->epfd,op,fd,&ee) == -1)return -1;
     return 0;
 }
 
@@ -125,6 +126,8 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
             if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
             if (e->events & EPOLLERR) mask |= AE_WRITABLE;
             if (e->events & EPOLLHUP) mask |= AE_WRITABLE;
+			
+			//将触发的事件fd和类型，加入到，触发的事件列表中,这样做是为上层提供统一的激活事件列表。如果仅考虑linux平台，可以直接在里面处理。
             eventLoop->fired[j].fd = e->data.fd;
             eventLoop->fired[j].mask = mask;
         }

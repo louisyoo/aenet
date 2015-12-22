@@ -55,12 +55,12 @@ void zlibc_free(void *ptr) {
 #endif
 
 /* Explicitly override malloc/free etc when using tcmalloc. */
-#if defined(USE_TCMALLOC)
+#if defined(USE_TCMALLOC) //google
 #define malloc(size) tc_malloc(size)
 #define calloc(count,size) tc_calloc(count,size)
 #define realloc(ptr,size) tc_realloc(ptr,size)
 #define free(ptr) tc_free(ptr)
-#elif defined(USE_JEMALLOC)
+#elif defined(USE_JEMALLOC)//facebook
 #define malloc(size) je_malloc(size)
 #define calloc(count,size) je_calloc(count,size)
 #define realloc(ptr,size) je_realloc(ptr,size)
@@ -112,6 +112,7 @@ static size_t used_memory = 0;
 static int zmalloc_thread_safe = 0;
 pthread_mutex_t used_memory_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+//oom means Out Of Memory, 输出内存大小
 static void zmalloc_default_oom(size_t size) {
     fprintf(stderr, "zmalloc: Out of memory trying to allocate %zu bytes\n",
         size);
@@ -121,17 +122,17 @@ static void zmalloc_default_oom(size_t size) {
 
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
+
 void *zmalloc(size_t size) {
-    printf( "zmalloc start \n");
     void *ptr = malloc(size+PREFIX_SIZE);
 
-    if (!ptr) zmalloc_oom_handler(size);
+    if (!ptr) zmalloc_oom_handler(size); //输出错误 
 #ifdef HAVE_MALLOC_SIZE
-    update_zmalloc_stat_alloc(zmalloc_size(ptr));
+    update_zmalloc_stat_alloc(zmalloc_size(ptr)); //更新内存使用统计
     return ptr;
 #else
     *((size_t*)ptr) = size;
-    update_zmalloc_stat_alloc(size+PREFIX_SIZE);
+    update_zmalloc_stat_alloc(size+PREFIX_SIZE);  //更新内存使用统计
     return (char*)ptr+PREFIX_SIZE;
 #endif
 }
@@ -139,13 +140,13 @@ void *zmalloc(size_t size) {
 void *zcalloc(size_t size) {
     void *ptr = calloc(1, size+PREFIX_SIZE);
 
-    if (!ptr) zmalloc_oom_handler(size);
+    if (!ptr) zmalloc_oom_handler(size);//输出错误 
 #ifdef HAVE_MALLOC_SIZE
-    update_zmalloc_stat_alloc(zmalloc_size(ptr));
+    update_zmalloc_stat_alloc(zmalloc_size(ptr));//更新内存使用统计
     return ptr;
 #else
     *((size_t*)ptr) = size;
-    update_zmalloc_stat_alloc(size+PREFIX_SIZE);
+    update_zmalloc_stat_alloc(size+PREFIX_SIZE);//更新内存使用统计
     return (char*)ptr+PREFIX_SIZE;
 #endif
 }
@@ -173,15 +174,18 @@ void *zrealloc(void *ptr, size_t size) {
     if (!newptr) zmalloc_oom_handler(size);
 
     *((size_t*)newptr) = size;
-    update_zmalloc_stat_free(oldsize);
-    update_zmalloc_stat_alloc(size);
+    update_zmalloc_stat_free(oldsize); //更新内存统计-oldsize
+    update_zmalloc_stat_alloc(size);//更新内存统计+size
     return (char*)newptr+PREFIX_SIZE;
 #endif
 }
 
 /* Provide zmalloc_size() for systems where this function is not provided by
  * malloc itself, given that in that case we store a header with this
- * information as the first bytes of every allocation. */
+ * information as the first bytes of every allocation.
+   |------------------ptr--------------...---------|
+   |--PREFIX_SIZE--|------realptr------...---------|
+ */
 #ifndef HAVE_MALLOC_SIZE
 size_t zmalloc_size(void *ptr) {
     void *realptr = (char*)ptr-PREFIX_SIZE;
@@ -194,7 +198,6 @@ size_t zmalloc_size(void *ptr) {
 #endif
 
 void zfree(void *ptr) {
-printf( "zfree start \n");
 #ifndef HAVE_MALLOC_SIZE
     void *realptr;
     size_t oldsize;
@@ -243,6 +246,7 @@ void zmalloc_enable_thread_safeness(void) {
     zmalloc_thread_safe = 1;
 }
 
+//输出内存信息
 void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
     zmalloc_oom_handler = oom_handler;
 }
@@ -263,6 +267,7 @@ void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
 #include <sys/stat.h>
 #include <fcntl.h>
 
+//获取RSS物理内存值,查看进程的/proc/pid/stat 第24个字段
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     size_t rss;
@@ -326,6 +331,7 @@ size_t zmalloc_get_rss(void) {
 #endif
 
 /* Fragmentation = RSS / allocated-bytes */
+//内存使用率,是否充分利用了内存
 float zmalloc_get_fragmentation_ratio(size_t rss) {
     return (float)rss/zmalloc_used_memory();
 }

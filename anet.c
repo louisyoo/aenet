@@ -28,7 +28,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "fmacros.h"
+//#include "fmacros.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -91,11 +91,13 @@ int anetBlock(char *err, int fd) {
 
 /* Set TCP keep alive option to detect dead peers. The interval option
  * is only used for Linux as we are using Linux-specific APIs to set
- * the probe send time, interval, and count. */
+ * the probe send time, interval, and count. 
+   TCP连接的存活检测。
+ */
 int anetKeepAlive(char *err, int fd, int interval)
 {
     int val = 1;
-
+    //开启keepalive选项
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) == -1)
     {
         anetSetError(err, "setsockopt SO_KEEPALIVE: %s", strerror(errno));
@@ -108,6 +110,7 @@ int anetKeepAlive(char *err, int fd, int interval)
      * actually useful. */
 
     /* Send first probe after interval. */
+	//第一个keepalive检测时间interval秒后,
     val = interval;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
         anetSetError(err, "setsockopt TCP_KEEPIDLE: %s\n", strerror(errno));
@@ -117,6 +120,7 @@ int anetKeepAlive(char *err, int fd, int interval)
     /* Send next probes after the specified interval. Note that we set the
      * delay as interval / 3, as we send three probes before detecting
      * an error (see the next setsockopt call). */
+	 //首次之后的下次检测时间间隔val秒，首次三分之一
     val = interval/3;
     if (val == 0) val = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
@@ -126,6 +130,7 @@ int anetKeepAlive(char *err, int fd, int interval)
 
     /* Consider the socket in error state after three we send three ACK
      * probes without getting a reply. */
+	 //最大检测次数
     val = 3;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val)) < 0) {
         anetSetError(err, "setsockopt TCP_KEEPCNT: %s\n", strerror(errno));
@@ -138,6 +143,8 @@ int anetKeepAlive(char *err, int fd, int interval)
     return ANET_OK;
 }
 
+//禁用tcp nagle算法，在多次发送小包情况下，为了避免网络拥塞，而将其缓存下来，等到一定量了，再发送。默认启用
+//在网络游戏中，不能这样，会降低实时性。nginx中是可选项。
 static int anetSetTcpNoDelay(char *err, int fd, int val)
 {
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) == -1)
@@ -148,17 +155,20 @@ static int anetSetTcpNoDelay(char *err, int fd, int val)
     return ANET_OK;
 }
 
+//禁用nagle算法
 int anetEnableTcpNoDelay(char *err, int fd)
 {
     return anetSetTcpNoDelay(err, fd, 1);
 }
 
+//启用nagle算法
 int anetDisableTcpNoDelay(char *err, int fd)
 {
     return anetSetTcpNoDelay(err, fd, 0);
 }
 
 
+//设置发送缓冲区大小
 int anetSetSendBuffer(char *err, int fd, int buffsize)
 {
     if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buffsize, sizeof(buffsize)) == -1)
@@ -169,6 +179,8 @@ int anetSetSendBuffer(char *err, int fd, int buffsize)
     return ANET_OK;
 }
 
+
+//好像和上面一样的
 int anetTcpKeepAlive(char *err, int fd)
 {
     int yes = 1;
@@ -181,6 +193,7 @@ int anetTcpKeepAlive(char *err, int fd)
 
 /* Set the socket send timeout (SO_SNDTIMEO socket option) to the specified
  * number of milliseconds, or disable it if the 'ms' argument is zero. */
+ //在connect调用前声明，设置connect超时时间
 int anetSendTimeout(char *err, int fd, long long ms) {
     struct timeval tv;
 
@@ -199,7 +212,9 @@ int anetSendTimeout(char *err, int fd, long long ms) {
  *
  * If flags is set to ANET_IP_ONLY the function only resolves hostnames
  * that are actually already IPv4 or IPv6 addresses. This turns the function
- * into a validating / normalizing function. */
+ * into a validating / normalizing function.
+    resolve解析
+ */
 int anetGenericResolve(char *err, char *host, char *ipbuf, size_t ipbuf_len,
                        int flags)
 {
@@ -231,10 +246,13 @@ int anetResolve(char *err, char *host, char *ipbuf, size_t ipbuf_len) {
     return anetGenericResolve(err,host,ipbuf,ipbuf_len,ANET_NONE);
 }
 
-int anetResolveIP(char *err, char *host, char *ipbuf, size_t ipbuf_len) {
+//解析IP
+int anetResolveIP(char *err, char *host, char *ipbuf, size_t ipbuf_len)
+{
     return anetGenericResolve(err,host,ipbuf,ipbuf_len,ANET_IP_ONLY);
 }
 
+//一般情况下，一个端口释放后会等待2分钟后才能被使用，SO_REUSEADDR 是让端口释放后立即可以被使用。
 static int anetSetReuseAddr(char *err, int fd) {
     int yes = 1;
     /* Make sure connection-intensive things like the redis benckmark
@@ -246,6 +264,8 @@ static int anetSetReuseAddr(char *err, int fd) {
     return ANET_OK;
 }
 
+
+
 static int anetCreateSocket(char *err, int domain) {
     int s;
     if ((s = socket(domain, SOCK_STREAM, 0)) == -1) {
@@ -255,6 +275,7 @@ static int anetCreateSocket(char *err, int domain) {
 
     /* Make sure connection-intensive things like the redis benchmark
      * will be able to close/open sockets a zillion of times */
+	 //确保可以譬如benchmark这样亿万次的，关闭/打开
     if (anetSetReuseAddr(err,s) == ANET_ERR) {
         close(s);
         return ANET_ERR;
@@ -369,6 +390,7 @@ int anetTcpNonBlockBestEffortBindConnect(char *err, char *addr, int port,
             ANET_CONNECT_NONBLOCK|ANET_CONNECT_BE_BINDING);
 }
 
+//unix本地套接字，用于进程间通信。
 int anetUnixGenericConnect(char *err, char *path, int flags)
 {
     int s;
@@ -394,19 +416,21 @@ int anetUnixGenericConnect(char *err, char *path, int flags)
     }
     return s;
 }
-
+//unix本地套接字，用于进程间通信。
 int anetUnixConnect(char *err, char *path)
 {
     return anetUnixGenericConnect(err,path,ANET_CONNECT_NONE);
 }
-
+//unix本地套接字，用于进程间通信。
 int anetUnixNonBlockConnect(char *err, char *path)
 {
     return anetUnixGenericConnect(err,path,ANET_CONNECT_NONBLOCK);
 }
 
 /* Like read(2) but make sure 'count' is read before to return
- * (unless error or EOF condition is encountered) */
+ * (unless error or EOF condition is encountered) 
+   循环从底层socket缓冲区读取数据。
+ */
 int anetRead(int fd, char *buf, int count)
 {
     int nread, totlen = 0;
@@ -628,3 +652,46 @@ int anetSockName(int fd, char *ip, size_t ip_len, int *port) {
     }
     return 0;
 }
+
+
+int listenToPort( char *bindaddr, int port, int* fds , int *count ) 
+{
+  
+          char neterr[1024];
+          int tcp_backlog;  
+          if (bindaddr == NULL) {
+            /* Bind * for both IPv6 and IPv4, we enter here only if
+ *              * server.bindaddr_count == 0. */
+            fds[*count] = anetTcp6Server( neterr,port,NULL,tcp_backlog);
+            if (fds[*count] != -1) {
+                anetNonBlock(NULL,fds[*count]);
+                (*count)++;
+            }
+            fds[*count] = anetTcpServer( neterr,port,NULL,tcp_backlog);
+            if (fds[*count] != ANET_ERR) {
+                anetNonBlock(NULL,fds[*count]);
+                (*count)++;
+            }
+            /* Exit the loop if we were able to bind * on IPv4 or IPv6,
+ *              * otherwise fds[*count] will be ANET_ERR and we'll print an
+ *                           * error and return to the caller with an error. */
+            if (*count) return 1;
+        } else if (strchr(bindaddr,':')) {
+            /* Bind IPv6 address. */
+            fds[*count] = anetTcp6Server( neterr,port, bindaddr,tcp_backlog);
+        } else {
+            /* Bind IPv4 address. */
+            fds[*count] = anetTcpServer(neterr,port,bindaddr,tcp_backlog);
+        }
+        if (fds[*count] == -1) {
+                printf( "Creating Server TCP listening socket %s:%d: %s",
+               bindaddr ? bindaddr : "*",
+                port, neterr);
+            return -1;
+        }
+        anetNonBlock(NULL,fds[*count]);
+        (*count)++;
+
+    return 1;
+}
+
