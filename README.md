@@ -1,2 +1,3 @@
-# aenet
+aenet是一个基于redis核心的异步事件网络库。
+
 第一版可以正常运行的demo
