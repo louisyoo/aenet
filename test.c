@@ -290,12 +290,13 @@ void runMasterLoop()
 	l = aeCreateEventLoop( 1024 );
 	aeSetBeforeSleepProc(l,loop_init);
 	int res;
-//jt....
 	
 	
 	//监听定时事件
 	installMasterSignal( l );
 
+        res = aeCreateFileEvent(l,sockfd[0],AE_READABLE,onReadableEvent,user_data);
+	printf("create file event is ok? [%d]\n",res==0 );
 	//定时器事件
 	res = aeCreateTimeEvent(l,5*1000,time_cb,NULL,fin_cb);
 	printf("create time event is ok? [%d]\n",!res);
