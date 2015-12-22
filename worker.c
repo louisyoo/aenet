@@ -11,8 +11,8 @@
 #include <sys/socket.h>
 #include "server.h"
 
-extern aEvBase;
-
+//extern aEvBase;
+//extern aWorker;
 //======================
 void initWorkerOnLoopStart( aeEventLoop *l) 
 {
@@ -84,9 +84,9 @@ void freeClient( userClient* c  )
 {
    if (c->fd != -1)
    {
-		aeDeleteFileEvent( aWorker.el,c->fd,AE_READABLE);
-		aeDeleteFileEvent( aWorker.el,c->fd,AE_WRITABLE);
-		close(c->fd);
+	aeDeleteFileEvent( aWorker.el,c->fd,AE_READABLE);
+	aeDeleteFileEvent( aWorker.el,c->fd,AE_WRITABLE);
+	close(c->fd);
    } 
    zfree(c); 
 }
@@ -128,7 +128,7 @@ void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask)
         onClose( c );
         return;
     }
-    onRead( c ,nread );
+    onRecv( c ,nread );
 }
 
 
@@ -145,12 +145,12 @@ void finalCallback(struct aeEventLoop *l,void *data)
 }
 
 
-void addSignal( int sig, void(*handler)(int), bool restart = true )
+void addSignal( int sig, void(*handler)(int), int restart  )
 {
     struct sigaction sa;
     memset( &sa, '\0', sizeof( sa ) );
     sa.sa_handler = handler;
-    if( restart )
+    if( restart == 1 )
     {
         sa.sa_flags |= SA_RESTART;
     }
@@ -162,7 +162,7 @@ void addSignal( int sig, void(*handler)(int), bool restart = true )
 
 void childTermHandler( int sig )
 {
-    aWorker.running = false;
+    aWorker.running = 0;
 }
 
 void childChildHandler( int sig )
@@ -188,11 +188,11 @@ void runWorkerProcess( int pidx ,int pipefd )
 	aWorker.maxClient=1024;
 	aWorker.pidx = pidx;
 	aWorker.pipefd = pipefd;
-	aWorker.running = true;
+	aWorker.running = 1;
 	
 	//这里要安装信号接收器..
-	addSignal( SIGTERM, childTermHandler, false );
-    addSignal( SIGCHLD, childChildHandler );
+	addSignal( SIGTERM, childTermHandler, 0 );
+        addSignal( SIGCHLD, childChildHandler , 1 );
 	
 	aWorker.el = aeCreateEventLoop( aWorker.maxClient );
 	

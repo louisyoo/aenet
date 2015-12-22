@@ -11,8 +11,8 @@
 #include <sys/socket.h>
 #include "server.h"
 
-aEventBase aEvBase;
-aWorkerBase aWorker;
+//aEventBase aEvBase;
+//aWorkerBase aWorker;
 
 void initOnLoopStart(struct aeEventLoop *el) 
 {
@@ -34,20 +34,20 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 	//如果收到主进程发来的信号事件,这是主进程发来的。。同一个进程间的通信。。
 	else if( fd == aEvBase.sig_pipefd[0] )
 	{	
-		int sig;
+		int sig,ret,i;
 		char signals[1024];
 		ret = recv( aEvBase.sig_pipefd[0], signals, sizeof( signals ), 0 );
 		if( ret == -1 )
 		{
-			continue;
+		  return;
 		}
 		else if( ret == 0 )
 		{
-			continue;
+		  return;
 		}
 		else
 		{
-			for( int i = 0; i < ret; ++i )
+			for(  i = 0; i < ret; ++i )
 			{
 				switch( signals[i] )
 				{
@@ -55,10 +55,10 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 					case SIGCHLD:
 					{
 						pid_t pid;
-						int stat;
+						int stat,i;
 						while ( ( pid = waitpid( -1, &stat, WNOHANG ) ) > 0 )
 						{
-							for( int i = 0; i < WORKER_PROCESS_COUNT; ++i )
+							for( i = 0; i < WORKER_PROCESS_COUNT; ++i )
 							{
 								if( aEvBase.worker_process[i].pid == pid )
 								{
@@ -67,12 +67,12 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 								}
 							}
 						}
-						aEvBase.running = false;
-						for( int i = 0; i < WORKER_PROCESS_COUNT; ++i )
+						aEvBase.running = 0;
+						for( i = 0; i < WORKER_PROCESS_COUNT; ++i )
 						{
 							if( aEvBase.worker_process[i].pid != -1 )
 							{
-								aEvBase.running = true;
+								aEvBase.running = 1;
 							}
 						}
 						break;
@@ -80,8 +80,9 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 					case SIGTERM:
 					case SIGINT:
 					{
+						int i;
 						printf( "kill all the clild now\n" );
-						for( int i = 0; i < WORKER_PROCESS_COUNT; ++i )
+						for( i = 0; i < WORKER_PROCESS_COUNT; ++i )
 						{
 							int pid = aEvBase.worker_process[i].pid;
 							//alarm/kill send signal to process,
@@ -138,18 +139,19 @@ void masterSignalHandler( int sig )
 //所以此处的addEvent是加入到主进程event_loop中的。
 void installMasterSignal( aeEventLoop *l )
 {
-	int ret = socketpair( PF_UNIX, SOCK_STREAM, 0, aEvBase.sig_pipefd );
+	int ret;
+    ret  = socketpair( PF_UNIX, SOCK_STREAM, 0, aEvBase.sig_pipefd );
     assert( ret != -1 );
     anetNonBlock( aEvBase.sig_pipefd[1] );
 	
 	//把信号管道一端加到master event_loop中，使其被epoll关注
-	res = aeCreateFileEvent(l,aEvBase.sig_pipefd[0],AE_READABLE,onReadableEvent,NULL);
+    ret = aeCreateFileEvent(l,aEvBase.sig_pipefd[0],AE_READABLE,onReadableEvent,NULL);
 	
 	//装载信号，指定回调函数,如果用户引发信号事件，则回调。
-    addSignal( SIGCHLD, masterSignalHandler );	//catch child process exit event
-    addSignal( SIGTERM, masterSignalHandler );  //catch exit event by kill or Ctrl+C ..
-    addSignal( SIGINT,  masterSignalHandler );
-    addSignal( SIGPIPE, SIG_IGN );
+    addSignal( SIGCHLD, masterSignalHandler , 1 );	//catch child process exit event
+    addSignal( SIGTERM, masterSignalHandler , 1 );  //catch exit event by kill or Ctrl+C ..
+    addSignal( SIGINT,  masterSignalHandler , 1 );
+    addSignal( SIGPIPE, SIG_IGN , 1 );
 }
 
 
@@ -160,7 +162,7 @@ void initServerBase()
 		return;
 	}
 	bzero( &aEvBase , sizeof( aEvBase ));
-	aEvBase.running = true;
+	aEvBase.running = 1;
 	aEvBase.pid = getpid();
 	aEvBase.usable_cpu_num = sysconf(_SC_NPROCESSORS_ONLN);
 }
@@ -170,7 +172,8 @@ void initServerBase()
 void installWorkerProcess()
 {
 	char* neterr;
-    for( int i = 0; i < WORKER_PROCESS_COUNT; ++i )
+       int ret,i;
+    for(  i = 0; i < WORKER_PROCESS_COUNT; ++i )
     {
         ret = socketpair( PF_UNIX, SOCK_STREAM, 0, aEvBase.worker_process[i].pipefd );
         assert( ret != -1 );

@@ -2,12 +2,16 @@
 #ifndef __AE_SERVER_H__
 #define __AE_SERVER_H__
 #include <time.h>
-
+#include <signal.h> 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <string.h> 
+#include "ae.h"
 #define MAXFD 1024
 #define WORKER_PROCESS_COUNT 3
 
-extern aEventBase aEvBase;
-extern aWorkerBase aWorkerBase;
+
 
 struct aeEventLoop;
 typedef struct UserClient
@@ -32,7 +36,7 @@ typedef struct _workerBase
 	int   pidx; //主进程中分的编号0-x
 	pid_t pid;
 	int pipefd;
-	bool running;
+	int running;
 	aeEventLoop *el;
 	int maxClient;
 	//clientList.. zlist
@@ -49,7 +53,7 @@ typedef struct _aEventBase
 	aeEventLoop *el; 
 	int sig_pipefd[2];
 	workerInfo worker_process[ WORKER_PROCESS_COUNT ];
-	bool running;
+	int running;
     int worker_process_counter;
 }aEventBase;
 
@@ -81,7 +85,10 @@ void acceptCommonHandler( aeEventLoop *el,int fd,char* client_ip,int client_port
 void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
 int timerCallback(struct aeEventLoop *l,long long id,void *data);
 void finalCallback( struct aeEventLoop *l,void *data );
-void addSignal( int sig, void(*handler)(int), bool restart = true );
+void addSignal( int sig, void(*handler)(int), int restart );
 void runWorkerProcess( int pidx ,int pipefd );
 
+
+aEventBase aEvBase;
+aWorkerBase aWorker;
 #endif
