@@ -51,9 +51,14 @@ void acceptCommonHandler( aeEventLoop *el,int fd,char* client_ip,int client_port
         close(fd); /* May be already closed, just ignore errors */
         return;
     }
+   
     c->client_ip = client_ip;
     c->client_port = client_port;
     c->flags |= flags;
+
+    printf( "Function addr =%p \n" , &aEvBase.serv->onConnect );
+    aEvBase.serv->onConnect( aEvBase.serv , c );
+    
 }
 
 //子进程中
@@ -94,22 +99,6 @@ void freeClient( userClient* c  )
    zfree(c); 
 }
 
-//子进程
-void onRecv( userClient *c , int len )
-{
-     printf( "recv len = %d \n" , len  );
-     printf( "on_read recv data = %s \n" , c->recv_buffer );
-
-     char buff[64] = "i recv your message:\n";
-     anetWrite( c->fd , buff , sizeof( buff ));
-     int sendlen = anetWrite( c->fd , c->recv_buffer , strlen( c->recv_buffer ));
-}
-
-void onClose( userClient *c )
-{
-     printf( "Worker Client closed  = %d  \n", c->fd );
-     freeClient( c );
-}
 
 void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask)
 {
@@ -124,14 +113,14 @@ void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask)
         if (errno == EAGAIN) {
             nread = 0;
         } else {
-			onClose( c );
+	 aEvBase.serv->onClose( aEvBase.serv, c );
             return;
         }
     } else if (nread == 0) {
-        onClose( c );
+        aEvBase.serv->onClose( aEvBase.serv , c );
         return;
     }
-    onRecv( c ,nread );
+    aEvBase.serv->onRecv( aEvBase.serv, c ,nread );
 }
 
 

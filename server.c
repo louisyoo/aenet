@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include "ae.h"
+#include "anet.h"
 #include <errno.h>
 #include <sys/socket.h>
 #include "server.h"
@@ -134,9 +135,10 @@ void masterSignalHandler( int sig )
 void installMasterSignal( aeEventLoop *l )
 {
     int ret;
+    char neterr[1024];
     ret  = socketpair( PF_UNIX, SOCK_STREAM, 0, aEvBase.sig_pipefd );
     assert( ret != -1 );
-    anetNonBlock( aEvBase.sig_pipefd[1] );
+    anetNonBlock( neterr, aEvBase.sig_pipefd[1] );
 	
      //把信号管道一端加到master event_loop中，使其被epoll关注
     ret = aeCreateFileEvent(l,aEvBase.sig_pipefd[0],AE_READABLE,onReadableEvent,NULL);
@@ -149,30 +151,31 @@ void installMasterSignal( aeEventLoop *l )
      addSignal( SIGPIPE, SIG_IGN , 1 );
 }
 
-int ServerCreate( aeServer* serv )
+aeServer* aeServerCreate()
 {
+    aeServer* serv = (aeServer*)zmalloc( sizeof(aeServer ));
+    //aeServer serv;
     serv->runForever = startServer;
-    serv->
-    initServerBase();
-}
+    serv->send = anetWrite;
+    serv->close = freeClient;
+    
+    bzero( &aEvBase , sizeof( aEvBase ));
+    aEvBase.serv = serv;    
 
-
-void initServerBase()
-{
-	if( aEvBase.running )
-	{
+    if( aEvBase.running )
+    {
 	  exit( 0 );
-	}
-	bzero( &aEvBase , sizeof( aEvBase ));
-	aEvBase.running = 1;
-	aEvBase.pid = getpid();
-	aEvBase.usable_cpu_num = sysconf(_SC_NPROCESSORS_ONLN);
+    }
+    aEvBase.running = 1;
+    aEvBase.pid = getpid();
+    aEvBase.usable_cpu_num = sysconf(_SC_NPROCESSORS_ONLN);
 
-        aEvBase.el = aeCreateEventLoop( 1024 );
-        aeSetBeforeSleepProc(aEvBase.el,initOnLoopStart );
+    aEvBase.el = aeCreateEventLoop( 1024 );
+    aeSetBeforeSleepProc(aEvBase.el,initOnLoopStart );
 
-        //install signal
-        installMasterSignal( aEvBase.el );
+    //install signal
+    installMasterSignal( aEvBase.el );
+    return aEvBase.serv;
 }
 
 
@@ -211,18 +214,17 @@ void installWorkerProcess()
 
 int startServer( char* ip , int port )
 {	
-//	initServerBase();
 	
 	int sockfd[2];
 	int sock_count = 0;          
-	
+
 	listenToPort( ip, port , sockfd , &sock_count );
 	aEvBase.listenfd = sockfd[0];
 	aEvBase.listenIPv6fd = sockfd[1];
 	printf( "master listen count %d,listen fd %d , pid=%d \n",sock_count,aEvBase.listenfd,aEvBase.pid  );
 
-	installWorkerProcess();
-	
+ 
+	installWorkerProcess();	
 	runMasterLoop();
 	puts("Master Exit ,Everything is ok !!!\n");
 	return 0;

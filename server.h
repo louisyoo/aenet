@@ -14,7 +14,7 @@
 
 
 struct aeEventLoop;
-typedef struct UserClient
+typedef struct _userClient
 {
   int flags;
   int fd;
@@ -42,6 +42,17 @@ typedef struct _workerBase
 	//clientList.. zlist
 }aWorkerBase;
 
+typedef struct _aeServer aeServer;
+struct _aeServer
+{
+   void (*runForever )( char* ip, int port );
+   void (*onConnect)( aeServer* serv , userClient *c );
+   void (*onRecv)( aeServer *serv, userClient* client , int len );
+   void (*onClose)( aeServer *serv , userClient *c );
+   int  (*send)(  int fd, char* data , int len );
+   void (*close)(   userClient *c  );
+};
+
 typedef struct _aEventBase
 {
 	int listenfd;
@@ -55,28 +66,9 @@ typedef struct _aEventBase
 	workerInfo worker_process[ WORKER_PROCESS_COUNT ];
 	int running;
         int worker_process_counter;
+	aeServer *serv;
 }aEventBase;
 
-typedef struct _userClient
-{
-  int flags;
-  int fd;
-  char recv_buffer[10240];
-  int  read_index;
-  char* client_ip;
-  int client_port;
-}userClient;
-
-
-typedef struct _aeServer
-{
-   void (*runForever )( char* ip, int port );
-   void (*onConnect)( aeServer *serv, int fd , int fromid );
-   int  (*onReceive)( aeServer *serv, userClient* client );
-   void (*onClose)( aeServer *serv , int fd );
-   void (*send)( aeServer *serv, int fd, char* data , int len );
-   void (*close)( aeServer *serv, int fd );
-}aeServer;
 
 void initOnLoopStart( aeEventLoop *el );
 void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask);
@@ -84,7 +76,7 @@ void installWorkerProcess();
 void runMasterLoop();
 void masterSignalHandler( int sig );
 void installMasterSignal( aeEventLoop *l );
-void initServerBase();
+aeServer* aeServerCreate();
 int startServer( char* ip , int port );
 
 //=============child process============
