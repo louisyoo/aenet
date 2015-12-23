@@ -12,10 +12,6 @@
 
 #define MAXFD 1024
 
-void acceptCommonHandler( aeEventLoop *el , int fd, int flags);
-userClient *newClient( aeEventLoop *el , int fd);
-void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
-
 
 typedef struct UserClient
 {
@@ -24,6 +20,10 @@ typedef struct UserClient
   char recv_buffer[10240];
   int  read_index;
 }userClient;
+
+void acceptCommonHandler( aeEventLoop *el , int fd, int flags);
+userClient *newClient( aeEventLoop *el , int fd);
+void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
 
 void loop_init(struct aeEventLoop *l) 
 {
