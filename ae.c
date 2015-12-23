@@ -137,16 +137,14 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
 {
     if (fd >= eventLoop->setsize) {
         errno = ERANGE;
-        printf( "111\n");
         return AE_ERR;
     }
     aeFileEvent *fe = &eventLoop->events[fd];
 
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
     {
-		printf( "222\n" );
         return AE_ERR;
-     }
+    }
     fe->mask |= mask;
     if (mask & AE_READABLE) fe->rfileProc = proc;
     if (mask & AE_WRITABLE) fe->wfileProc = proc;
