@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "httpServer.h"
 #include "server.h"
-
+//libevent http.c evhttp_read_cb()
 //这是个全局变量
 requestHeaderField  requestHeaderFeilds[] = {
     { "Host", "", 				aeHttpProcessHost },
