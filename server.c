@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include "server.h"
 
+#include <unistd.h>
 //aEventBase aEvBase;
 //aWorkerBase aWorker;
 
@@ -28,7 +29,7 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 		char neterr[1024];
 		int new_conn = 1;
 		send( aEvBase.worker_process[aEvBase.worker_process_counter++].pipefd[0], ( char* )&new_conn, sizeof( new_conn ), 0 );
-		printf( "master send request to child %d\n", aEvBase.worker_process_counter-1 );
+	//	printf( "master send request to child %d\n", aEvBase.worker_process_counter-1 );
 		aEvBase.worker_process_counter %= WORKER_PROCESS_COUNT;
 	}
 	//如果收到主进程发来的信号事件,这是主进程发来的。。同一个进程间的通信。。
@@ -56,33 +57,26 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 					{
 						printf( "Master recv child process stoped signal\n");
 						pid_t pid;
-						int stat,i;
+						int stat,pidx;
+						//WNOHANG
 						while ( ( pid = waitpid( -1, &stat, WNOHANG ) ) > 0 )
 						{
-							for( i = 0; i < WORKER_PROCESS_COUNT; ++i )
+							for( pidx = 0; pidx < WORKER_PROCESS_COUNT; ++pidx )
 							{
-								if( aEvBase.worker_process[i].pid == pid )
+								if( aEvBase.worker_process[pidx].pid == pid )
 								{
-									close( aEvBase.worker_process[i].pipefd[0] );
-									aEvBase.worker_process[i].pid = -1;
+									//aeDeleteFileEvent( aEvBase.el,aEvBase.worker_process[i].pipefd[0] ,AE_READABLE );
+									close( aEvBase.worker_process[pidx].pipefd[0] );
+									aEvBase.worker_process[pidx].pid = -1;
 								}
-							}
+						        }
 						}
 						aEvBase.running = 0;
-						for( i = 0; i < WORKER_PROCESS_COUNT; ++i )
-						{
-							if( aEvBase.worker_process[i].pid != -1 )
-							{
-								aEvBase.running = 1;
-							}
-						}
-						if( aEvBase.running == 0)
-						{
-							aeStop( aEvBase.el );
-						}
+						aeStop( aEvBase.el );
 						break;
 					}
 					case SIGTERM:
+					case SIGQUIT:
 					case SIGINT:
 					{
 						int i;
@@ -154,10 +148,11 @@ void installMasterSignal( aeEventLoop *l )
     ret = aeCreateFileEvent(l,aEvBase.sig_pipefd[0],AE_READABLE,onReadableEvent,NULL);
 	
 	//装载信号，指定回调函数,如果用户引发信号事件，则回调。
-    addSignal( SIGCHLD, masterSignalHandler , 1 );	//catch child process exit event
-    addSignal( SIGTERM, masterSignalHandler , 1 );  //catch exit event by kill or Ctrl+C ..
-    addSignal( SIGINT,  masterSignalHandler , 1 );
-    addSignal( SIGPIPE, SIG_IGN , 1 );
+     addSignal( SIGCHLD, masterSignalHandler , 1 );	//catch child process exit event
+     addSignal( SIGTERM, masterSignalHandler , 1 );  //catch exit event by kill or Ctrl+C ..
+     addSignal( SIGINT,  masterSignalHandler , 1 );
+//     addSignal( SIGQUIT , masterSignalHandler, 1 );
+     addSignal( SIGPIPE, SIG_IGN , 1 );
 }
 
 

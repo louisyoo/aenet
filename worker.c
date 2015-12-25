@@ -16,20 +16,20 @@
 //======================
 void initWorkerOnLoopStart( aeEventLoop *l) 
 {
-    puts("worker Event Loop Init!!! \n");
+ //   puts("worker Event Loop Init!!! \n");
 }
 
 //子进程接收请求。。
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask)
 {
-
-    printf( "Worker acceptTcpHandler callback fd =%d , listenfd=%d........\n" , fd , aEvBase.listenfd );
-    int client_port, client_fd, max = 2;
+    //不断的通知啊，要人命，考虑把listenfd改为阻塞模式,或者在主进程接收，将fd传给子进程,这样比较稳妥
+    //printf( "Worker acceptTcpHandler callback fd =%d , listenfd=%d........\n" , fd , aEvBase.listenfd );
+    int client_port, client_fd, max = 1;
     char client_ip[46];
     char neterr[1024];
 
     while(max--)
-	{
+    {
         client_fd = anetTcpAccept( neterr, aEvBase.listenfd , client_ip, sizeof(client_ip), &client_port );
         if (client_fd == -1 ) {
             if (errno != EWOULDBLOCK)
@@ -38,7 +38,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask)
         }
         printf("Worker Accepted %s:%d client_fd=%d \n", client_ip, client_port,client_fd );
         acceptCommonHandler( el ,client_fd,client_ip,client_port,0 );
-    }
+  }
 }
 
 //子进程中
