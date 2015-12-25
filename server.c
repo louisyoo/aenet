@@ -104,13 +104,7 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 
 void runMasterLoop()
 {
-	//aEvBase.el = aeCreateEventLoop( 1024 );
-	//aeSetBeforeSleepProc(aEvBase.el,initOnLoopStart );
 	int res;
-
-	//install signal
-	//installMasterSignal( aEvBase.el );
-
 	//listenfd event
 	res = aeCreateFileEvent( aEvBase.el, aEvBase.listenfd,AE_READABLE,onReadableEvent,NULL);
 	printf("master create file event is ok? [%d]\n",res==0 );
@@ -144,10 +138,10 @@ void installMasterSignal( aeEventLoop *l )
     assert( ret != -1 );
     anetNonBlock( aEvBase.sig_pipefd[1] );
 	
-	//把信号管道一端加到master event_loop中，使其被epoll关注
+     //把信号管道一端加到master event_loop中，使其被epoll关注
     ret = aeCreateFileEvent(l,aEvBase.sig_pipefd[0],AE_READABLE,onReadableEvent,NULL);
 	
-	//装载信号，指定回调函数,如果用户引发信号事件，则回调。
+     //装载信号，指定回调函数,如果用户引发信号事件，则回调。
      addSignal( SIGCHLD, masterSignalHandler , 1 );	//catch child process exit event
      addSignal( SIGTERM, masterSignalHandler , 1 );  //catch exit event by kill or Ctrl+C ..
      addSignal( SIGINT,  masterSignalHandler , 1 );

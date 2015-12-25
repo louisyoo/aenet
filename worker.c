@@ -51,8 +51,8 @@ void acceptCommonHandler( aeEventLoop *el,int fd,char* client_ip,int client_port
         close(fd); /* May be already closed, just ignore errors */
         return;
     }
-	c->client_ip = client_ip;
-	c->client_port = client_port;
+    c->client_ip = client_ip;
+    c->client_port = client_port;
     c->flags |= flags;
 }
 
