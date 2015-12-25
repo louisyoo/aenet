@@ -16,7 +16,7 @@
 
 void initOnLoopStart(struct aeEventLoop *el) 
 {
-    puts("I'm loop_init!!! \n");
+  //  puts("master loop_init!!! \n");
 }
 
 //当监听的listenfd有事件发生时，
@@ -28,12 +28,12 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 		char neterr[1024];
 		int new_conn = 1;
 		send( aEvBase.worker_process[aEvBase.worker_process_counter++].pipefd[0], ( char* )&new_conn, sizeof( new_conn ), 0 );
-		printf( "send request to child %d\n", aEvBase.worker_process_counter-1 );
+		printf( "master send request to child %d\n", aEvBase.worker_process_counter-1 );
 		aEvBase.worker_process_counter %= WORKER_PROCESS_COUNT;
 	}
 	//如果收到主进程发来的信号事件,这是主进程发来的。。同一个进程间的通信。。
 	else if( fd == aEvBase.sig_pipefd[0] )
-	{	
+	{       printf( "Recv Master Siginal fd=%d...\n" , fd );	
 		int sig,ret,i;
 		char signals[1024];
 		ret = recv( aEvBase.sig_pipefd[0], signals, sizeof( signals ), 0 );
@@ -54,6 +54,7 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 					//child process stoped
 					case SIGCHLD:
 					{
+						printf( "Master recv child process stoped signal\n");
 						pid_t pid;
 						int stat,i;
 						while ( ( pid = waitpid( -1, &stat, WNOHANG ) ) > 0 )
@@ -75,13 +76,17 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 								aEvBase.running = 1;
 							}
 						}
+						if( aEvBase.running == 0)
+						{
+							aeStop( aEvBase.el );
+						}
 						break;
 					}
 					case SIGTERM:
 					case SIGINT:
 					{
 						int i;
-						printf( "kill all the clild now\n" );
+						printf( "master kill all the clild now\n" );
 						for( i = 0; i < WORKER_PROCESS_COUNT; ++i )
 						{
 							int pid = aEvBase.worker_process[i].pid;
@@ -105,20 +110,20 @@ void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask)
 
 void runMasterLoop()
 {
-	aEvBase.el = aeCreateEventLoop( 1024 );
-	aeSetBeforeSleepProc(aEvBase.el,initOnLoopStart );
+	//aEvBase.el = aeCreateEventLoop( 1024 );
+	//aeSetBeforeSleepProc(aEvBase.el,initOnLoopStart );
 	int res;
 
 	//install signal
-	installMasterSignal( aEvBase.el );
+	//installMasterSignal( aEvBase.el );
 
 	//listenfd event
 	res = aeCreateFileEvent( aEvBase.el, aEvBase.listenfd,AE_READABLE,onReadableEvent,NULL);
-	printf("create file event is ok? [%d]\n",res==0 );
+	printf("master create file event is ok? [%d]\n",res==0 );
 	
 	//timer event
-	res = aeCreateTimeEvent( aEvBase.el,5*1000,timerCallback,NULL,finalCallback);
-	printf("create time event is ok? [%d]\n",!res);
+	//res = aeCreateTimeEvent( aEvBase.el,5*1000,timerCallback,NULL,finalCallback);
+	//printf("master create time event is ok? [%d]\n",!res);
 
 	aeMain( aEvBase.el);
 	aeDeleteEventLoop( aEvBase.el );
@@ -128,6 +133,7 @@ void runMasterLoop()
 //此处send是发给了主进程的event_loop，而不是发给子进程的。
 void masterSignalHandler( int sig )
 {
+    printf( "Master Send Sigal to Master Loop...\n");
     int save_errno = errno;
     int msg = sig;
     send( aEvBase.sig_pipefd[1], ( char* )&msg, 1, 0 );
@@ -139,7 +145,7 @@ void masterSignalHandler( int sig )
 //所以此处的addEvent是加入到主进程event_loop中的。
 void installMasterSignal( aeEventLoop *l )
 {
-	int ret;
+    int ret;
     ret  = socketpair( PF_UNIX, SOCK_STREAM, 0, aEvBase.sig_pipefd );
     assert( ret != -1 );
     anetNonBlock( aEvBase.sig_pipefd[1] );
@@ -159,20 +165,26 @@ void initServerBase()
 {
 	if( aEvBase.running )
 	{
-		return;
+	  exit( 0 );
 	}
 	bzero( &aEvBase , sizeof( aEvBase ));
 	aEvBase.running = 1;
 	aEvBase.pid = getpid();
 	aEvBase.usable_cpu_num = sysconf(_SC_NPROCESSORS_ONLN);
+
+        aEvBase.el = aeCreateEventLoop( 1024 );
+        aeSetBeforeSleepProc(aEvBase.el,initOnLoopStart );
+
+        //install signal
+        installMasterSignal( aEvBase.el );
 }
 
 
 //装载子进程
 void installWorkerProcess()
 {
-	char* neterr;
-       int ret,i;
+    char* neterr;
+    int ret,i;
     for(  i = 0; i < WORKER_PROCESS_COUNT; ++i )
     {
         ret = socketpair( PF_UNIX, SOCK_STREAM, 0, aEvBase.worker_process[i].pipefd );
@@ -211,11 +223,11 @@ int startServer( char* ip , int port )
 	listenToPort( ip, port , sockfd , &sock_count );
 	aEvBase.listenfd = sockfd[0];
 	aEvBase.listenIPv6fd = sockfd[1];
-	printf( "listen count %d,listen fd %d \n",sock_count,aEvBase.listenfd );
+	printf( "master listen count %d,listen fd %d , pid=%d \n",sock_count,aEvBase.listenfd,aEvBase.pid  );
 
 	installWorkerProcess();
 	
 	runMasterLoop();
-	puts("Everything is ok !!!\n");
+	puts("Master Exit ,Everything is ok !!!\n");
 	return 0;
 }

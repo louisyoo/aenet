@@ -16,24 +16,27 @@
 //======================
 void initWorkerOnLoopStart( aeEventLoop *l) 
 {
-    puts("Event Loop Init!!! \n");
+    puts("worker Event Loop Init!!! \n");
 }
 
 //子进程接收请求。。
-void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
-    int client_port, client_fd, max = 10;
+void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask)
+{
+
+    printf( "Worker acceptTcpHandler callback fd =%d , listenfd=%d........\n" , fd , aEvBase.listenfd );
+    int client_port, client_fd, max = 2;
     char client_ip[46];
     char neterr[1024];
 
     while(max--)
 	{
-        client_fd = anetTcpAccept( neterr, fd, client_ip, sizeof(client_ip), &client_port );
+        client_fd = anetTcpAccept( neterr, aEvBase.listenfd , client_ip, sizeof(client_ip), &client_port );
         if (client_fd == -1 ) {
             if (errno != EWOULDBLOCK)
-                    printf("Accepting client connection: %s \n", neterr);
+                    printf("Worker Accepting client connection: %s \n", neterr);
             return;
         }
-        printf("Accepted %s:%d client_fd=%d \n", client_ip, client_port,client_fd );
+        printf("Worker Accepted %s:%d client_fd=%d \n", client_ip, client_port,client_fd );
         acceptCommonHandler( el ,client_fd,client_ip,client_port,0 );
     }
 }
@@ -44,7 +47,7 @@ void acceptCommonHandler( aeEventLoop *el,int fd,char* client_ip,int client_port
     userClient* c;
     if ((c = newClient( el ,fd)) == NULL)
     {
-       	printf( "Error registering fd event for the new client\n" );
+       	printf( "Worker Error registering fd event for the new client\n" );
         close(fd); /* May be already closed, just ignore errors */
         return;
     }
@@ -66,7 +69,7 @@ userClient* newClient( aeEventLoop *el , int fd)
 	*/
         if (aeCreateFileEvent( el,fd,AE_READABLE,readFromClient, c) == -1 )
         {
-            printf( "createFileEvent error fd =%d  \n" ,fd );
+            printf( "Worker createFileEvent error fd =%d  \n" ,fd );
             close(fd);
             zfree(c);
             return NULL;
@@ -104,7 +107,7 @@ void onRecv( userClient *c , int len )
 
 void onClose( userClient *c )
 {
-     printf( "Client closed  = %d  \n", c->fd );
+     printf( "Worker Client closed  = %d  \n", c->fd );
      freeClient( c );
 }
 
@@ -134,7 +137,6 @@ void readFromClient(aeEventLoop *el, int fd, void *privdata, int mask)
 
 int timerCallback(struct aeEventLoop *l,long long id,void *data)
 {
-	printf("now is %ld\n",time(NULL));
 	printf("I'm time_cb,here [EventLoop: %p],[id : %lld],[data: %p] \n",l,id,data);
 	return 5*1000;
 }
@@ -162,11 +164,14 @@ void addSignal( int sig, void(*handler)(int), int restart  )
 
 void childTermHandler( int sig )
 {
+    printf( "Worker Recv Int Signal...\n");
     aWorker.running = 0;
+    aeStop( aWorker.el );
 }
 
 void childChildHandler( int sig )
 {
+    printf( "Worker Recv Child Signal...\n");
     pid_t pid;
     int stat;
     while ( ( pid = waitpid( -1, &stat, WNOHANG ) ) > 0 )
@@ -183,6 +188,7 @@ void childChildHandler( int sig )
 */
 void runWorkerProcess( int pidx ,int pipefd )
 {
+        printf( "run worker process...\n");
 	//每个进程私有的。
 	aWorker.pid = getpid();
 	aWorker.maxClient=1024;
@@ -199,13 +205,16 @@ void runWorkerProcess( int pidx ,int pipefd )
 	aeSetBeforeSleepProc( aWorker.el,initWorkerOnLoopStart );
 	int res;
 
+
+         printf( "Worker listen Pipefd = %d \n" , aWorker.pipefd );
 	//等待父进程管道通知有新连接到来,所以关注管道
 	res = aeCreateFileEvent( aWorker.el,
 		aWorker.pipefd,
 		AE_READABLE,
 		acceptTcpHandler,NULL
 	);
-	printf("create file event is ok? [%d]\n",res==0 );
+   
+	printf("Worker pid=%d create file event is ok? [%d]\n",aWorker.pid,res==0 );
 	
 	//定时器
 	//res = aeCreateTimeEvent(el,5*1000,timerCallback,NULL,finalCallback);
@@ -213,4 +222,6 @@ void runWorkerProcess( int pidx ,int pipefd )
 
 	aeMain(aWorker.el);
 	aeDeleteEventLoop(aWorker.el);
+        close( pipefd );
+        printf( "Worker pid=%d exit...\n" , aWorker.pid );
 }
