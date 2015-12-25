@@ -54,9 +54,29 @@ typedef struct _aEventBase
 	int sig_pipefd[2];
 	workerInfo worker_process[ WORKER_PROCESS_COUNT ];
 	int running;
-    int worker_process_counter;
+        int worker_process_counter;
 }aEventBase;
 
+typedef struct _userClient
+{
+  int flags;
+  int fd;
+  char recv_buffer[10240];
+  int  read_index;
+  char* client_ip;
+  int client_port;
+}userClient;
+
+
+typedef struct _aeServer
+{
+   void (*runForever )( char* ip, int port );
+   void (*onConnect)( aeServer *serv, int fd , int fromid );
+   int  (*onReceive)( aeServer *serv, userClient* client );
+   void (*onClose)( aeServer *serv , int fd );
+   void (*send)( aeServer *serv, int fd, char* data , int len );
+   void (*close)( aeServer *serv, int fd );
+}aeServer;
 
 void initOnLoopStart( aeEventLoop *el );
 void onReadableEvent(aeEventLoop *el, int fd, void *privdata, int mask);

@@ -6,6 +6,7 @@
 
 int main( int argc,char *argv[] )
 {
+	aeServer serv;
 	startServer( "0.0.0.0" , 3002 );
 	return 0;
 }

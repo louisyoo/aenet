@@ -149,6 +149,13 @@ void installMasterSignal( aeEventLoop *l )
      addSignal( SIGPIPE, SIG_IGN , 1 );
 }
 
+int ServerCreate( aeServer* serv )
+{
+    serv->runForever = startServer;
+    serv->
+    initServerBase();
+}
+
 
 void initServerBase()
 {
@@ -204,7 +211,7 @@ void installWorkerProcess()
 
 int startServer( char* ip , int port )
 {	
-	initServerBase();
+//	initServerBase();
 	
 	int sockfd[2];
 	int sock_count = 0;          
