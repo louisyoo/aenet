@@ -5,6 +5,54 @@
 #include "httpServer.h"
 #include "server.h"
 
+//这是个全局变量
+requestHeaderField  requestHeaderFeilds[] = {
+    { "Host", "", 				aeHttpProcessHost },
+    { "Connection", "", 		aeHttpProcessConnection },
+    { "If-Modified-Since", "",	aeHttpProcessUniqueHeaderLine },
+    { "If-Unmodified-Since","",	aeHttpProcessUniqueHeaderLine },
+	{ "If-Match","",			aeHttpProcessUniqueHeaderLine }, //单一行
+	{ "If-None-Match","",		aeHttpProcessUniqueHeaderLine }, 
+	{ "User-Agent","",			aeHttpProcessUserAgent },
+	{ "Referer","",				aeHttpProcessHeaderLine }, 
+	{ "Content-Length","",		aeHttpProcessUniqueHeaderLine }, 
+	{ "Content-Type","",		aeHttpProcessHeaderLine },
+	{ "Range","",				aeHttpProcessHeaderLine },
+	{ "If-Range","",			aeHttpProcessUniqueHeaderLine }, 
+	{ "Transfer-Encoding","",	aeHttpProcessHeaderLine },
+	{ "Expect","",				aeHttpProcessUniqueHeaderLine }, 
+	{ "Upgrade","",				aeHttpProcessHeaderLine },
+#if (AE_HTTP_GZIP)
+	{ "Accept-Encoding","",		aeHttpProcessHeaderLine },
+	{ "Via","",					aeHttpProcessHeaderLine },
+#endif
+    { "Authorization","",		aeHttpProcessUniqueHeaderLine},
+	{ "Keep-Alive","",			aeHttpProcessHeaderLine },
+#if (AE_HTTP_X_FORWARDED_FOR)
+    { "X-Forwarded-For","",		aeHttpProcessMultiHeaderLines },
+#endif
+
+#if (AE_HTTP_REALIP)
+    { "X-Real-IP","", 			aeHttpProcessHeaderLine },
+#endif
+
+#if (AE_HTTP_HEADERS)
+	{ "Accept","", 				aeHttpProcessHeaderLine },
+	{ "X-Real-IP","", 			aeHttpProcessHeaderLine },
+	{ "Accept-Language","", 	aeHttpProcessHeaderLine },
+#endif
+
+#if (AE_HTTP_DAV)
+	{ "Depth","", 				aeHttpProcessHeaderLine },
+	{ "Destination","", 		aeHttpProcessHeaderLine },
+	{ "Overwrite","", 			aeHttpProcessHeaderLine },
+	{ "Date","", 				aeHttpProcessHeaderLine },
+#endif
+	{ "Cookie","",				aeHttpProcessMultiHeaderLines },
+    { "", "", NULL }
+};
+
+
 int httpResponse(  userClient *c ,char* data,int len )
 {
 	 int sendlen;
@@ -12,12 +60,9 @@ int httpResponse(  userClient *c ,char* data,int len )
 	 return sendlen;
 }
 
-
 /*
 1,数组存储一个key-val结构体,表示header头的，键值对，参考nginx
 2,先检测header是否收全，找\r\n\r\n 换行符。从头往后找。
-
-
 */
 int parseRequestProtocol()
 {
@@ -137,7 +182,7 @@ int parseRequestContentLength( httpRequest *request)
 }
 
 
-void httpRequestParse(  httpRequest* request )
+void httpRequestParseHeader(  httpRequest* request )
 {
 	if( request->method == HTTP_METHOD_NONE && parseRequestProtocol() == AE_ERR )
 	{
@@ -301,14 +346,36 @@ void httpRequestParse(  httpRequest* request )
 return AE_OK;
 }
 
+int requestHeaderHasComplete()
+{
+	int n = strnpos( aeRequest->sock->recv_buffer, aeRequest->sock->recv_length , "\r\n\r\n" , 4 );
+	if( n < 0 )
+	{
+		return AE_FALSE;
+	}
+	
+	if( n > AE_HTTP_HEADER_MAX_SIZE )
+	{
+		closeHttpConnect( aeRequest->sock );
+		return AE_FALSE;
+	}
+	
+	aeRequest->header_length = n + 4;
+	return AE_TRUE;
+}
+
 //子进程
 void onHttpRequest( aeServer* serv , userClient *c , int len )
 {
-         printf( "httpRequest Length:%d Data:\n%s" , len , c->recv_buffer  );
+     printf( "httpRequest Length:%d Data:\n%s" , len , c->recv_buffer  );
 	 if( aeRequest->sock == NULL )aeRequest->sock=c;
 	  
-	 httpRequestParse( aeRequest );
-
+	 if( requestHeaderHasComplete() == AE_FALSE )
+	 {
+		 AE_RETURN_FOR_CONTINUE_RECEIVE;
+	 }
+	 httpRequestParseHeader( aeRequest );
+	 
 	 closeHttpConnect( c );	
 //	 int sendlen;
 //	 sendlen = httpResponse( c ,  c->recv_buffer , strlen( c->recv_buffer ) );
@@ -320,7 +387,7 @@ void closeHttpConnect( userClient *c )
 	 printf( "Worker Client closed  = %d  \n", c->fd );
 	 
 	 //关闭socket userClient
-         aeHttpServ.sock->close( c );
+     aeHttpServ.sock->close( c );
 	 //TODO::01...这里可以不用施放,memset清空就可以了，
 	 //但是相应的分配内存时，在main之前就分配,否则会内存泄露。
 	 if( aeRequest )
@@ -348,7 +415,7 @@ void initHttpServer( aeServer* serv  )
 	 bzero( &aeHttpServ , sizeof( aeHttpServ ));
 	 
 	 aeRequest = NULL;
-         aeHttpServ.open_http_protocol = 1;
+     aeHttpServ.open_http_protocol = 1;
 	 aeHttpServ.open_websocket_protocol = 0;
 	 aeHttpServ.sock = serv;
 	 
@@ -363,7 +430,7 @@ void runHttpServer( char* ip , int port )
 	 aeHttpServ.listen_port = port;
 	 
 	 aeServer* serv = aeServerCreate();  
-         initHttpServer( serv );
+     initHttpServer( serv );
 	 serv->runForever( ip , port );
 }
 
