@@ -6,7 +6,7 @@
 #include "server.h";
 
 #define AE_SPACE       ' '
-#define AE_CRLF        "\r\n"
+#define AE_EOL_CRLF        "\r\n"
 #define AE_OK        0
 #define AE_ERR       -1
 #define AE_TRUE        1
