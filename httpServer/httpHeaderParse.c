@@ -20,9 +20,10 @@ typedef struct
 {
 	char* method;
 	char* version;
+	char* uri;
 	//..
 	
-}headerOptions;
+}headerParams;
 
 typedef struct
 {
@@ -32,7 +33,7 @@ typedef struct
 	int buffer_pos; //当前解析的位置，在buffer中的偏移量
 	
 	headerFiled fileds[30]; //分析的结果数组，因为不宜搜索和读取。因此有了。headerOptions
-	headerOptions option;   //分析的结果结构体
+	headerParams params;   //分析的结果结构体
 	
 	(char*)(findValueInFileds( char* key ));
 }httpHeader;
@@ -87,38 +88,114 @@ static int getLeftEolLength( char* s )
 }
 
 
-
+//返回的是在buffer中的偏移量
 int bufferLineSearchEOL( httpHeader* header , char* buffer , int len , char* eol_style )
 {
 	//先清空左边空格
-	header->buffer_pos += getLeftEolLength( buffer );
+	//header->buffer_pos += getLeftEolLength( buffer );
 	char* cp = findEolChar( buffer , len );
 	int offset = cp - buffer;
 	if( cp && offset > 0 )
 	{
-		header->buffer_pos += offset;
+		//header->buffer_pos += offset;
 		return offset;
 	}
-	
 	return AE_ERR;
 }
 
 
-//以\r\n结尾读取一行
-char* bufferReadln( char* buffer , int lineSize , char* eol_style )
+//从上次取到的位置，在剩余的buffer长度中查找，以\r\n结尾读取一行
+int bufferReadln( httpHeader* header , char* buffer , int len , char* eol_style )
 {
-	char* result;
-	lineSize = bufferLineSearchEOL( buffer , lineSize , eol_style );
-	//...是否找到
+	int read_len;
+	header->buffer_pos += getLeftEolLength( buffer );
+	read_len = len - header->buffer_pos;
+	
+	offset = bufferLineSearchEOL( header , buffer+header->buffer_pos , read_len , eol_style );
+	if( offset < 0 )
+	{
+		return AE_ERR;
+	}
+	
+	//表示buffer的起始位置
+	return offset;
+}
+
+
+//return char* point to first space position in s;
+char* findSpace(  char* s , int len )
+{
+	char *s_end, *sp;
+	s_end = s + len;
+	while( s < s_end )
+	{
+		//每次循环查找128bytes
+		size_t chunk = ( s + CHUNK_SZ < s_end ) ? CHUNK_SZ : ( s_end - s );
+		sp = memchr( s , AE_SPACE , chunk );
+		if( sp )
+		{
+			return sp;		//xxxxx\r\ncccccc\r\n    	cr:xxxxx
+		}
+		s += CHUNK_SZ;
+	}
+	return NULL;
 }
 
 
 
+/*
+by RFC2616
+http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1
+The Request-Line begins with a method token, followed by the Request-URI and the protocol version, and ending with CRLF. 
+The elements are separated by SP characters. No CR or LF is allowed except in the final CRLF sequence.
+Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
+*/
 static int parseFirstLine( httpHeader* header , char* buffer , int len )
 {
-	int lineLength;
-	char* line;
-	line = bufferReadln( buffer , len , AE_EOL_CRLF );
+	int offset;
+	offset = bufferReadln( header , buffer , len , AE_EOL_CRLF );
+	if( offset != AE_OK )
+	{
+		//error means header uncomplate, or a wrong header.
+		return AE_ERR;
+	}
+	
+	//first line end position except CRLF
+	header->buffer_pos += offset;
+	
+	//find SPACE pos in ( buffer , buffer + header->buffer_pos );
+	char* space;
+	int find_count = 0;
+	int section = 1;
+	while( section <= 3 )
+	{
+		//因为是第一行，从开头到行末。
+		space = findSpace( buffer + find_count , offset );
+		//only third times find space=NULL
+		if( space == NULL && section != 3 )
+		{
+			return AE_ERR;
+		}
+		
+		find_count = space - ( buffer + find_count );
+		if( section == 1 )
+		{	
+			memcpy( header->params.method , buffer , find_count );
+		}
+		else if( section == 2 )
+		{
+			memcpy( header->params.uri , buffer , find_count );
+		}
+		else if( section == 3 )
+		{
+			memcpy( header->params.version , buffer , find_count );
+			break;
+		}
+		
+		//加1是因为要去除掉一个空格的位置
+		find_count++;
+	}
+	
 	
 	//..
 	

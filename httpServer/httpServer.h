@@ -16,6 +16,9 @@
 #define AE_RETURN_FOR_CONTINUE_RECEIVE            return
 #define AE_BREAK_FOR_CONTINUE_RECEIVE             break
 
+
+//hrtimer 高精度定时器
+
 enum httpMethod
 {
 	HTTP_METHOD_NONE = 0,
